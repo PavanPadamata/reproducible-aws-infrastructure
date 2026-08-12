@@ -1,0 +1,15 @@
+# Normalise line endings so files are stored as LF in the repository
+# regardless of the developer's operating system.
+* text=auto eol=lf
+
+# Shell scripts must use LF. CRLF makes bash fail with an unhelpful
+# "bad interpreter" error, because the interpreter path picks up a
+# trailing carriage return.
+*.sh text eol=lf
+
+# Terraform and configuration files: LF, for consistency in diffs.
+*.tf   text eol=lf
+*.hcl  text eol=lf
+*.md   text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
