@@ -1,0 +1,42 @@
+# Terraform state contains everything Terraform knows about the
+# infrastructure, including values marked sensitive (database passwords,
+# private IPs) in plaintext. Never commit. Moved to S3 in a later phase.
+*.tfstate
+*.tfstate.*
+
+# Provider binaries and modules downloaded by `terraform init`.
+# Large, platform-specific, and fully regenerable.
+.terraform/
+
+# Terraform writes state fragments into crash logs when it panics.
+crash.log
+crash.*.log
+
+# Variable files hold real values (account IDs, CIDRs, credentials).
+# A committed terraform.tfvars.example documents the required shape.
+*.tfvars
+*.tfvars.json
+!terraform.tfvars.example
+
+# Saved plan files embed resource attributes and can contain secrets.
+*.tfplan
+
+# SSH private keys and local environment files.
+*.pem
+*.key
+.env
+
+# Override files are for local experiments, never shared config.
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Editor and OS noise.
+.vscode/
+.idea/
+.DS_Store
+
+# NOTE: .terraform.lock.hcl is intentionally NOT ignored.
+# It pins provider versions and checksums so every run — local or CI —
+# resolves to the same providers that were tested.
