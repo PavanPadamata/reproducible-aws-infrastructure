@@ -34,6 +34,36 @@ module "app" {
   subnet_id = values(module.vpc.app_subnet_ids)[0]
 }
 
+module "db" {
+  source = "../../modules/rds"
+
+  name       = "${local.name_prefix}-db"
+  vpc_id     = module.vpc.vpc_id
+  subnet_ids = values(module.vpc.data_subnet_ids)
+
+  allowed_security_group_ids = [module.app.security_group_id]
+
+  # Dev is destroyed after every session (ADR 0002), so the protections
+  # that stop an accidental delete are switched off here, on purpose, and
+  # visibly. The module defaults keep them on.
+  deletion_protection   = false
+  skip_final_snapshot   = true
+  backup_retention_days = 1
+}
+
+# The database module owns the inbound rule on the database's security
+# group. The matching outbound rule belongs to the application's group,
+# which the database module cannot edit, so it is declared here. The
+# application's default egress allows only HTTPS.
+resource "aws_vpc_security_group_egress_rule" "app_to_db" {
+  security_group_id            = module.app.security_group_id
+  referenced_security_group_id = module.db.security_group_id
+  ip_protocol                  = "tcp"
+  from_port                    = module.db.port
+  to_port                      = module.db.port
+  description                  = "Database port to the RDS security group"
+}
+
 module "app_data" {
   source = "../../modules/s3"
 
