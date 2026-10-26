@@ -1,0 +1,39 @@
+# Hooks run on every commit once installed with `pre-commit install`.
+# `rev` pins each hook repository to a release tag, so every machine
+# runs identical checks. Update with `pre-commit autoupdate` and review
+# the diff.
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: check-yaml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+      - id: detect-private-key
+
+  - repo: https://github.com/antonbabenko/pre-commit-terraform
+    rev: v1.109.3
+    hooks:
+      - id: terraform_fmt
+      - id: terraform_validate
+        args:
+          - --hook-config=--retry-once-with-cleanup=true
+      - id: terraform_tflint
+        args:
+          - --args=--config=__GIT_WORKING_DIR__/.tflint.hcl
+      # Writes the inputs/outputs tables between the BEGIN_TF_DOCS and
+      # END_TF_DOCS markers in each module README.
+      - id: terraform_docs
+        files: ^modules/
+        args:
+          - --args=--config=.terraform-docs.yml
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
