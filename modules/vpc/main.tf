@@ -31,7 +31,7 @@ locals {
   app_subnets    = { for i, az in local.azs : az => var.app_subnet_cidrs[i] }
   data_subnets   = { for i, az in local.azs : az => var.data_subnet_cidrs[i] }
 
-  name_prefix = "${var.project_name}-${var.environment}"
+  name_prefix = var.name_prefix
 }
 
 # ---------------------------------------------------------------------
@@ -122,15 +122,19 @@ resource "aws_subnet" "data" {
 # NAT Gateway
 # ---------------------------------------------------------------------
 
-# A single NAT Gateway serves both Availability Zones. Production
+# Optional, and off by default: a NAT Gateway is billed hourly whether or
+# not traffic flows (ADR 0002), so a module consumer must opt in
+# explicitly (ADR 0008). Without it the app subnets have no route out,
+# which also means instances there cannot reach Systems Manager.
+#
+# A single NAT Gateway serves every Availability Zone. Production
 # designs place one per AZ so that losing a zone does not cut off
 # outbound traffic from the surviving zone. This is a deliberate cost
 # decision and a known single point of failure.
-#
-# Billed hourly whether or not traffic flows. See ADR 0002: the
-# environment is destroyed between sessions, which keeps this to cents.
 
 resource "aws_eip" "nat" {
+  count = var.enable_nat_gateway ? 1 : 0
+
   domain = "vpc"
 
   tags = {
@@ -145,7 +149,9 @@ resource "aws_eip" "nat" {
 # the NAT Gateway needs a functioning internet path at creation time,
 # but nothing in this resource block refers to the IGW.
 resource "aws_nat_gateway" "main" {
-  allocation_id = aws_eip.nat.id
+  count = var.enable_nat_gateway ? 1 : 0
+
+  allocation_id = aws_eip.nat[0].id
   subnet_id     = aws_subnet.public[local.azs[0]].id
 
   tags = {
@@ -173,19 +179,27 @@ resource "aws_route_table" "public" {
   }
 }
 
-# Application: outbound via NAT. Return traffic for connections the
-# instance opened is allowed back; nothing can initiate inbound.
+# Application: outbound via NAT when enabled. Return traffic for
+# connections the instance opened is allowed back; nothing can initiate
+# inbound.
 resource "aws_route_table" "app" {
   vpc_id = aws_vpc.main.id
-
-  route {
-    cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.main.id
-  }
 
   tags = {
     Name = "${local.name_prefix}-app-rt"
   }
+}
+
+# A separate aws_route, not an inline route block, because the default
+# route must be conditional on the NAT Gateway existing. Mixing inline
+# routes and aws_route on one table makes Terraform fight itself, so the
+# app table uses aws_route only.
+resource "aws_route" "app_nat" {
+  count = var.enable_nat_gateway ? 1 : 0
+
+  route_table_id         = aws_route_table.app.id
+  destination_cidr_block = "0.0.0.0/0"
+  nat_gateway_id         = aws_nat_gateway.main[0].id
 }
 
 # Database: no 0.0.0.0/0 route. Only the implicit local route for the
