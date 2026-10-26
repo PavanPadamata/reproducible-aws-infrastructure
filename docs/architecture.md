@@ -8,6 +8,25 @@ Application Load Balancer in public subnets; application instances run
 in private subnets with no public IP addresses; a managed PostgreSQL
 database sits in a separate isolated subnet tier.
 
+## Implementation status
+
+The diagram and tables below describe the **target** design. Not all of
+it is built. Scope was narrowed in ADR 0007.
+
+| Component | Status |
+|-----------|--------|
+| Provider configuration, tags, version pinning | Built (on `main`) |
+| VPC, subnets, route tables, IGW, NAT Gateway | Written on branch `feat/networking`, not yet on `main` |
+| EC2 instance with SSM access | Planned |
+| RDS database | Planned |
+| S3 bucket | Planned |
+| IAM roles, GitHub OIDC provider | Planned |
+| Application Load Balancer | Planned, beyond the initial scope |
+| Auto Scaling group | Planned, beyond the initial scope |
+| CloudTrail, CloudWatch metrics and alarm | Planned, beyond the initial scope |
+
+Update this table in the same pull request that changes a status.
+
 ## Diagram
 
 ```mermaid
