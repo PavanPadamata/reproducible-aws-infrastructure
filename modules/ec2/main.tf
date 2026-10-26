@@ -63,11 +63,14 @@ resource "aws_iam_role_policy_attachment" "ssm" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
+# count, not for_each: the ARNs may belong to policies created in the same
+# apply, so their values are unknown at plan time. for_each needs its keys
+# at plan time; count needs only the length of the list, which is known.
 resource "aws_iam_role_policy_attachment" "additional" {
-  for_each = toset(var.additional_policy_arns)
+  count = length(var.additional_policy_arns)
 
   role       = aws_iam_role.this.name
-  policy_arn = each.value
+  policy_arn = var.additional_policy_arns[count.index]
 }
 
 resource "aws_iam_instance_profile" "this" {
