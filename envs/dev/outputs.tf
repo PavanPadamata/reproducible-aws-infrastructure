@@ -21,6 +21,16 @@ output "data_subnet_ids" {
   value       = module.vpc.data_subnet_ids
 }
 
+output "app_instance_id" {
+  description = "ID of the application instance."
+  value       = module.app.instance_id
+}
+
+output "app_ssm_session_command" {
+  description = "Command that opens a shell on the application instance. Needs the Session Manager plugin for the AWS CLI."
+  value       = "aws ssm start-session --target ${module.app.instance_id} --region ${var.aws_region}"
+}
+
 output "app_data_bucket_name" {
   description = "Name of the application data S3 bucket."
   value       = module.app_data.bucket_id

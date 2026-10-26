@@ -23,6 +23,17 @@ module "vpc" {
   enable_nat_gateway = var.enable_nat_gateway
 }
 
+module "app" {
+  source = "../../modules/ec2"
+
+  name   = "${local.name_prefix}-app"
+  vpc_id = module.vpc.vpc_id
+
+  # values() orders by key, so this is the first Availability Zone every
+  # time. One instance, one zone: see ADR 0007.
+  subnet_id = values(module.vpc.app_subnet_ids)[0]
+}
+
 module "app_data" {
   source = "../../modules/s3"
 
