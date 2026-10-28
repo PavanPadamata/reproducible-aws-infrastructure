@@ -247,3 +247,79 @@ the machine, and the backend has never talked to real S3.
 3. `bootstrap/` passes `reproducible-aws-infra` as `name_prefix` to the `iam`
    module, not `reproducible-aws-infra-dev`. Why, and which statements stop
    the apply role from changing the state bucket and its own role?
+
+## 2026-10-28 — Phase 4: CI/CD with OIDC
+
+**Status of this entry:** the three workflows and the Dependabot config are
+written and pass `actionlint`. **None has run on GitHub**, none has
+authenticated to AWS, and `bootstrap/` (which creates the roles they use) has
+not been applied. Expect the first runs to need fixes.
+
+**Concepts**
+- OIDC instead of stored keys: GitHub signs a short-lived token for each run,
+  AWS checks it against the role's trust policy, and no secret exists to leak
+  or rotate. The job needs `permissions: id-token: write` to request it; that
+  permission grants nothing on GitHub itself.
+- The `sub` claim decides which role a job may assume. A job with no
+  Environment gets `repo:O/R:pull_request`, which only the plan role trusts.
+  A job with `environment: dev` gets `repo:O/R:environment:dev`, which only
+  the apply role trusts. The branch restriction is therefore a setting on the
+  Environment, not something the trust policy sees (ADR 0009).
+- `GITHUB_TOKEN` permissions are set to read-only at the top of each workflow
+  and widened per workflow only where needed.
+- Pin actions to a full commit SHA: a tag such as `v4` can be moved to
+  different code after you reviewed it, a SHA cannot. The release stays in a
+  comment, and Dependabot updates both together.
+- Check downloaded tools against a pinned SHA-256. A checksum fetched from the
+  same release page only catches corruption, not a tampered release.
+- Pass values into shell through `env`, not by writing `${{ ... }}` inside the
+  script. Expressions are substituted before the shell runs, which is how
+  injection bugs happen when the value is attacker-controlled.
+- Fork pull requests must not get AWS credentials: the fork's workflow code is
+  not reviewed. The plan job is skipped for them.
+- `concurrency` with `cancel-in-progress: false` for apply: cancelling an
+  apply halfway leaves a half-built environment and a held state lock.
+- Apply the saved plan (`plan -out` then `apply tfplan`) so what runs is what
+  the summary showed.
+- `workflow_dispatch` with a `choice` input gives a manual button with fixed
+  options, here `apply` and `destroy`.
+- The pre-commit gitleaks hook scans staged changes only, so a hook run over
+  all files can scan nothing. CI runs gitleaks over the full history, with
+  `fetch-depth: 0`.
+- A repository variable (not a secret) holds the role ARN. An ARN grants
+  nothing without a token that GitHub signs for this repository.
+- ADR 0006 (apply on merge) and ADR 0002 (nothing runs permanently) disagreed,
+  because applying creates a NAT Gateway, RDS and EC2 that bill by the hour.
+  ADR 0011 resolves it with a manual apply.
+
+**Commands**
+- `gh api repos/<owner>/<repo>/git/ref/tags/<tag>` to turn a release tag into
+  a commit SHA (annotated tags need one more call to peel them).
+- `actionlint .github/workflows/*.yml` to check workflows without GitHub.
+- `echo "<sha>  <file>" | sha256sum -c -`.
+
+**Mistakes and fixes**
+- A first draft of the variable check wrote `${{ vars.AWS_APPLY_ROLE_ARN }}`
+  inside the shell script. Moved it to `env`.
+- A status line in the README had grown past 80 characters after an earlier
+  edit; reflowed while updating it.
+
+**Not verified yet**
+- No workflow has run on GitHub. `actionlint` checks syntax, expressions and
+  action inputs, not behaviour. Assumptions that only a real run can confirm:
+  `pipx` is on the runner, the pre-commit terraform hooks work there, and
+  `tflint --init` can download the AWS ruleset.
+- The roles and their policies have never been created, so OIDC login has
+  never been attempted and the apply role's permissions are untested.
+- The `dev` Environment (required reviewers, deployment branch `main`) and the
+  three repository variables do not exist yet.
+- Branch protection with required checks is Phase 5.
+
+**Check yourself**
+1. The plan job and the apply job use different roles with no shared secret.
+   Which claim of the OIDC token selects each role, and what could go wrong if
+   the `dev` Environment had no required reviewers or branch rule?
+2. Why are the actions pinned to a commit SHA instead of a tag, and what keeps
+   those pins from going stale?
+3. Why is apply started by hand instead of on merge (ADR 0011), and what is
+   the downside of the reviewer approving before the job's plan exists?

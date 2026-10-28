@@ -22,6 +22,7 @@ it is built. Scope was narrowed in ADR 0007.
 | S3 bucket | Built (on `main`), tested offline, never applied |
 | IAM roles, GitHub OIDC provider | Built (on `main`), tested offline, never applied; called from `bootstrap/` (ADR 0009) |
 | Remote state bucket (`bootstrap/`) and S3 backend in `envs/dev` | Built, tested offline, never applied (ADR 0005, ADR 0010) |
+| GitHub Actions: checks, plan on pull request, manual apply and destroy | Written and linted with `actionlint`, never run on GitHub (ADR 0006, ADR 0011) |
 | Application Load Balancer | Planned, beyond the initial scope |
 | Auto Scaling group | Planned, beyond the initial scope |
 | CloudTrail, CloudWatch metrics and alarm | Planned, beyond the initial scope |
