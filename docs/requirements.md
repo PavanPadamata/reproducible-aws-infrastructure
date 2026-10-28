@@ -7,6 +7,14 @@ entirely in Terraform. The environment is provisioned on demand,
 verified, and destroyed — nothing runs permanently. The deliverable is
 the code and documentation, not a live system.
 
+## Scope of the first delivery
+
+The requirements below describe the full target. The first delivery is
+a smaller foundation (ADR 0007): five modules and a single EC2 instance.
+It does **not** meet the requirements for a public HTTP endpoint,
+traffic spread across instances, CloudTrail, or CloudWatch alarms.
+Those depend on the planned load balancer and Auto Scaling group.
+
 ## Functional Requirements
 
 - Serves HTTP/HTTPS traffic from a public endpoint
@@ -43,11 +51,14 @@ the code and documentation, not a live system.
 Deliberately out of scope for this project:
 
 - Kubernetes or any container orchestration
-- CI/CD pipelines (covered in a later project)
+- ~~CI/CD pipelines (covered in a later project)~~ — now in scope,
+  see ADR 0006
 - Multi-region or disaster recovery
 - Production traffic, real users, or SLAs
 - Autoscaling based on real load patterns
-- Centralised secrets management (Vault, Secrets Manager rotation)
+- Custom secrets management (Vault, hand-written rotation). The
+  database master password is the exception: RDS generates and stores
+  it in Secrets Manager, so no plaintext password exists in the code.
 
 ## Success Criteria
 
