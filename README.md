@@ -1,30 +1,31 @@
 # reproducible-aws-infrastructure
 
 [![License: MIT](https://img.shields.io/github/license/PavanPadamata/reproducible-aws-infrastructure)](LICENSE)
+[![checks](https://github.com/PavanPadamata/reproducible-aws-infrastructure/actions/workflows/checks.yml/badge.svg)](https://github.com/PavanPadamata/reproducible-aws-infrastructure/actions/workflows/checks.yml)
 
 A reusable, reviewable AWS foundation written in Terraform: VPC, EC2, RDS,
 S3 and IAM as separate modules, in `eu-central-1` (Frankfurt). The aim is
 an environment that can be created, verified and destroyed repeatedly with
 the same result, changed only through pull requests.
 
-> **Status: work in progress.** The five modules and a `dev` environment are
-> on `main`, checked offline only: `terraform fmt`, `validate`, `tflint`,
-> `terraform test` with a mock provider, and `trivy`. CI is not built. The tables below say exactly what is built and what is planned.
-> Nothing here has been applied to an AWS account yet.
-
-<!-- TODO(phase 4): add CI status badges once the workflows exist. -->
+> **Status: work in progress.** The five modules, a `dev` environment and
+> the bootstrap are on `main`, checked offline only: `terraform fmt`,
+> `validate`, `tflint`, `terraform test` with a mock provider, and `trivy`.
+> The GitHub Actions workflows are written and linted but have never run.
+> The tables below say exactly what is built and what is planned. Nothing
+> here has been applied to an AWS account yet.
 
 ## Status
 
 | Area | State |
 |------|-------|
 | Provider configuration, default tags, version pinning | Built |
-| Architecture docs, requirements, ADRs 0001-0010 | Built |
+| Architecture docs, requirements, ADRs 0001-0011 | Built |
 | `vpc`, `s3`, `iam`, `ec2`, `rds` modules | Built and tested offline, never applied |
 | `envs/dev` calling `vpc`, `s3`, `ec2` and `rds` | Built, never planned or applied |
 | `bootstrap/`: state bucket and CI roles (calls `s3` and `iam`) | Built and tested offline, never applied |
 | S3 backend with native locking in `envs/dev` | Configured; no state exists yet because `envs/dev` has never been applied |
-| CI: plan on pull request, apply on merge | Planned |
+| CI: checks and plan on pull request, manual apply and destroy | Written and linted with `actionlint`, never run on GitHub |
 | Load balancer, Auto Scaling, CloudTrail, CloudWatch alarms | Planned, beyond the initial scope ([ADR 0007](docs/adr/0007-initial-scope-five-modules.md)) |
 
 ## Target architecture
@@ -113,6 +114,40 @@ known limitations.
 TODO(measure): record the date the full destroy path was run end to end,
 and anything that did not clean up.
 
+## CI/CD
+
+Three GitHub Actions workflows in `.github/workflows/`. None has run on
+GitHub yet; they are linted with `actionlint` only.
+
+| Workflow | Runs | What it does | AWS access |
+|----------|------|--------------|------------|
+| `checks.yml` | every pull request and push to `main` | pre-commit hooks (fmt, validate, tflint, terraform-docs), `terraform test` in each module and `bootstrap/`, trivy on HIGH and CRITICAL, gitleaks over the full history | none |
+| `plan.yml` | pull requests that touch `envs/` or `modules/` | `terraform plan` of `envs/dev`, shown in the job summary | read-only `ci-plan` role |
+| `apply.yml` | started by hand, `main` only | `terraform apply` or `destroy` of `envs/dev`, behind a reviewer approval | `ci-apply` role |
+
+Apply is manual on purpose: applying creates a NAT Gateway, an RDS instance
+and an EC2 instance that bill by the hour, so it must not happen on every
+merge ([ADR 0011](docs/adr/0011-plan-on-pull-request-apply-by-hand.md)).
+Authentication uses OIDC; no AWS access keys are stored anywhere
+([ADR 0006](docs/adr/0006-ci-cd-with-github-actions-and-oidc.md)).
+
+**One-time setup, after `bootstrap/` has been applied.** The plan and apply
+workflows do nothing until these exist:
+
+1. Repository variables (Settings, Secrets and variables, Actions,
+   Variables), taken from the `bootstrap/` outputs: `AWS_PLAN_ROLE_ARN`,
+   `AWS_APPLY_ROLE_ARN` and `TF_STATE_BUCKET`. They are variables, not
+   secrets.
+2. An Environment named `dev` (Settings, Environments) with **required
+   reviewers** and a **deployment branch rule limited to `main`**. The apply
+   role trusts the Environment name, so without these two settings anything
+   that names the Environment could assume it
+   ([ADR 0009](docs/adr/0009-ci-roles-and-where-the-iam-module-runs.md)).
+
+The repository is public, so workflow logs and job summaries are public.
+Terraform hides sensitive values and the account ID is masked, but resource
+names and IDs appear in plans.
+
 ## Cost drivers
 
 These resources bill by the hour or by use whether or not anything is
@@ -158,7 +193,7 @@ What exists today:
 ├── modules/
 │   ├── vpc/  s3/  iam/  ec2/  rds/    each with tests/ and a README
 ├── .pre-commit-config.yaml  .tflint.hcl  .terraform-docs.yml
-└── .github/            CODEOWNERS, pull request template
+└── .github/            workflows, dependabot config, CODEOWNERS, pull request template
 ```
 
 ## Decisions
@@ -175,6 +210,7 @@ What exists today:
 | [0008](docs/adr/0008-nat-gateway-opt-in-and-ssm-connectivity.md) | NAT Gateway is opt-in; SSM needs an outbound path |
 | [0009](docs/adr/0009-ci-roles-and-where-the-iam-module-runs.md) | CI roles, and why the `iam` module runs from `bootstrap/` |
 | [0010](docs/adr/0010-state-bucket-from-the-s3-module-and-partial-backend.md) | State bucket from the `s3` module; partial backend |
+| [0011](docs/adr/0011-plan-on-pull-request-apply-by-hand.md) | Plan on pull request; apply and destroy started by hand |
 
 ## Contributing and security
 

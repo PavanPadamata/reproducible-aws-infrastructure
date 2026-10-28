@@ -1,0 +1,84 @@
+# Shows what a pull request would change in AWS, using the read-only
+# ci-plan role. It cannot change anything: that role can only read, plus
+# write the .tflock object that locks the state (ADR 0009).
+#
+# The job is skipped until bootstrap/ has been applied and the repository
+# variables below are set, so pull requests are not blocked before then.
+# See "CI/CD" in the README.
+
+name: plan
+
+on:
+  pull_request:
+    paths:
+      - "envs/**"
+      - "modules/**"
+      - ".github/workflows/plan.yml"
+
+# id-token: write lets the job ask GitHub for the signed OIDC token that AWS
+# exchanges for credentials. It grants nothing on GitHub itself.
+permissions:
+  contents: read
+  id-token: write
+
+# One plan per branch at a time; a newer push replaces the older run.
+concurrency:
+  group: plan-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    # Forks never get AWS credentials: the trust policy would reject the
+    # token anyway, and a fork's workflow code is not reviewed.
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      vars.AWS_PLAN_ROLE_ARN != '' &&
+      vars.TF_STATE_BUCKET != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+        working-directory: envs/dev
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Read the Terraform version
+        id: tf
+        working-directory: .
+        run: echo "version=$(cat .terraform-version)" >> "$GITHUB_OUTPUT"
+
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: ${{ steps.tf.outputs.version }}
+          terraform_wrapper: false
+
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_PLAN_ROLE_ARN }}
+          aws-region: eu-central-1
+          mask-aws-account-id: true
+
+      - name: terraform init
+        env:
+          STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+        run: terraform init -input=false -backend-config="bucket=${STATE_BUCKET}"
+
+      - name: terraform plan
+        run: terraform plan -input=false -no-color -lock-timeout=5m | tee plan.txt
+
+      # The repository is public, so job summaries and logs are public too.
+      # Terraform hides values marked sensitive, but resource names and IDs
+      # do appear.
+      - name: Show the plan
+        if: always()
+        run: |
+          {
+            echo '### terraform plan (envs/dev)'
+            echo
+            echo '```'
+            cat plan.txt 2>/dev/null || echo 'no plan produced'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
