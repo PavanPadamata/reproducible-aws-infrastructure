@@ -1,0 +1,8 @@
+# Every path requires review from the maintainer. With branch protection
+# set to "Require review from Code Owners", this makes review mandatory.
+*       @PavanPadamata
+
+# Workflows and IAM define what CI may do in AWS. Listed explicitly so
+# they stay owned if the catch-all above is ever loosened.
+/.github/       @PavanPadamata
+/modules/iam/   @PavanPadamata

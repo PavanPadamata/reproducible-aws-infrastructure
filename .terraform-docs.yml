@@ -1,0 +1,35 @@
+# terraform-docs configuration. Generates the requirements, inputs and
+# outputs tables inside each module README, between the markers below.
+# Text outside the markers is hand-written and left untouched.
+
+formatter: "markdown table"
+
+output:
+  file: README.md
+  mode: inject
+  template: |-
+    <!-- BEGIN_TF_DOCS -->
+    {{ .Content }}
+    <!-- END_TF_DOCS -->
+
+content: |-
+  {{ .Requirements }}
+
+  {{ .Providers }}
+
+  {{ .Resources }}
+
+  {{ .Inputs }}
+
+  {{ .Outputs }}
+
+sort:
+  enabled: true
+  by: name
+
+settings:
+  anchor: true
+  default: true
+  required: true
+  sensitive: true
+  type: true
