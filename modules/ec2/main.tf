@@ -108,6 +108,11 @@ resource "aws_vpc_security_group_ingress_rule" "this" {
   referenced_security_group_id = each.value.referenced_security_group_id
 }
 
+# The default rule allows HTTPS out to anywhere. The instance has no public
+# IP and no inbound path, and Session Manager works by the instance opening
+# an outbound connection, so it needs this (ADR 0004, ADR 0008). Callers can
+# narrow it through var.egress_rules.
+#trivy:ignore:AWS-0104
 resource "aws_vpc_security_group_egress_rule" "this" {
   for_each = { for r in var.egress_rules : r.description => r }
 
