@@ -12,10 +12,12 @@ output:
     {{ .Content }}
     <!-- END_TF_DOCS -->
 
+# No Providers section on purpose. When a module has a .terraform.lock.hcl
+# (terraform validate creates one), terraform-docs prints the locked version
+# there instead of the constraint, so the generated docs depend on local
+# state. Requirements already shows the constraint.
 content: |-
   {{ .Requirements }}
-
-  {{ .Providers }}
 
   {{ .Resources }}
 

@@ -7,9 +7,11 @@ S3 and IAM as separate modules, in `eu-central-1` (Frankfurt). The aim is
 an environment that can be created, verified and destroyed repeatedly with
 the same result, changed only through pull requests.
 
-> **Status: work in progress.** Only the provider configuration and the
-> documentation are on `main`. The tables below say exactly what is built
-> and what is planned. Nothing here has been applied to an AWS account yet.
+> **Status: work in progress.** The five modules and a `dev` environment are
+> on `main`, checked offline only: `terraform fmt`, `validate`, `tflint`,
+> `terraform test` with a mock provider, and `trivy`. Remote state and CI are
+> not built. The tables below say exactly what is built and what is planned.
+> Nothing here has been applied to an AWS account yet.
 
 <!-- TODO(phase 4): add CI status badges once the workflows exist. -->
 
@@ -18,10 +20,10 @@ the same result, changed only through pull requests.
 | Area | State |
 |------|-------|
 | Provider configuration, default tags, version pinning | Built |
-| Architecture docs, requirements, ADRs 0001-0007 | Built |
-| VPC, subnets, routing | Written on branch `feat/networking`, not yet merged |
-| `ec2`, `rds`, `s3`, `iam` modules | Planned |
-| Remote state bootstrap (`bootstrap/`) | Planned |
+| Architecture docs, requirements, ADRs 0001-0009 | Built |
+| `vpc`, `s3`, `iam`, `ec2`, `rds` modules | Built and tested offline, never applied |
+| `envs/dev` calling `vpc`, `s3`, `ec2` and `rds` | Built, never planned or applied |
+| Remote state bootstrap (`bootstrap/`), which will also call `iam` | Planned |
 | CI: plan on pull request, apply on merge | Planned |
 | Load balancer, Auto Scaling, CloudTrail, CloudWatch alarms | Planned, beyond the initial scope ([ADR 0007](docs/adr/0007-initial-scope-five-modules.md)) |
 
@@ -79,8 +81,9 @@ known limitations.
 
 ## Quickstart
 
-> **Not runnable yet.** `bootstrap/` and `envs/dev/` do not exist. This is
-> the intended flow, to be confirmed and corrected once they do.
+> **Not runnable yet.** `envs/dev/` exists but has never been planned or
+> applied, and `bootstrap/` does not exist. This is the intended flow, to be
+> confirmed and corrected once they do.
 
 1. `cd bootstrap`, then `terraform init`, `plan` and `apply` to create the
    state bucket. This uses local state, once.
@@ -125,11 +128,11 @@ TODO(measure): cost of one apply-and-destroy session, from Cost Explorer.
 
 | Module | Purpose | State |
 |--------|---------|-------|
-| `vpc` | Two-AZ network with public, app and data tiers | Written on `feat/networking`, flat, not yet a module |
-| `ec2` | Instance reachable through SSM, IMDSv2 required | Planned |
-| `rds` | Private encrypted database, password in Secrets Manager | Planned |
-| `s3` | Private bucket with versioning, encryption and TLS-only policy | Planned |
-| `iam` | Least-privilege roles, GitHub OIDC provider and CI role | Planned |
+| `vpc` | Two-AZ network with public, app and data tiers | Built, tested offline, never applied |
+| `ec2` | Instance reachable through SSM, IMDSv2 required | Built, tested offline, never applied |
+| `rds` | Private encrypted database, password in Secrets Manager | Built, tested offline, never applied |
+| `s3` | Private bucket with versioning, encryption and TLS-only policy | Built, tested offline, never applied |
+| `iam` | Least-privilege roles, GitHub OIDC provider and CI role | Built, tested offline, not called by any environment yet (it runs from `bootstrap/`, [ADR 0009](docs/adr/0009-ci-roles-and-where-the-iam-module-runs.md)) |
 
 ## Repository layout
 
@@ -142,10 +145,11 @@ What exists today:
 │   ├── architecture.md
 │   ├── requirements.md
 │   └── LEARNING.md     what was learned in each phase
+├── envs/
+│   └── dev/            root module: calls vpc, s3, ec2 and rds
+├── modules/
+│   ├── vpc/  s3/  iam/  ec2/  rds/    each with tests/ and a README
 ├── scripts/            bootstrap-state.sh (to be replaced by bootstrap/)
-├── providers.tf        AWS provider and default tags
-├── variables.tf
-├── versions.tf         Terraform and provider version pins
 ├── .pre-commit-config.yaml  .tflint.hcl  .terraform-docs.yml
 └── .github/            CODEOWNERS, pull request template
 ```
@@ -161,6 +165,8 @@ What exists today:
 | [0005](docs/adr/0005-s3-native-locking-and-terraform-bootstrap.md) | S3 native locking, Terraform bootstrap |
 | [0006](docs/adr/0006-ci-cd-with-github-actions-and-oidc.md) | GitHub Actions with OIDC |
 | [0007](docs/adr/0007-initial-scope-five-modules.md) | Initial scope: five modules, one instance |
+| [0008](docs/adr/0008-nat-gateway-opt-in-and-ssm-connectivity.md) | NAT Gateway is opt-in; SSM needs an outbound path |
+| [0009](docs/adr/0009-ci-roles-and-where-the-iam-module-runs.md) | CI roles, and why the `iam` module runs from `bootstrap/` |
 
 ## Contributing and security
 

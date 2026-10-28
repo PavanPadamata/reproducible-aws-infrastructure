@@ -149,13 +149,20 @@ once the tools were installed; the results are under "Verification" below.
   `6.70.0`. The cause: `terraform_validate` runs first and creates a
   `.terraform.lock.hcl` inside each module, and terraform-docs prints the
   locked version when one exists. The committed `~> 6.0` is the reproducible
-  one. Open follow-up for `.terraform-docs.yml` on `chore/repo-hygiene`:
-  drop `{{ .Providers }}`, because the Requirements table already shows the
-  constraint.
+  one. Fixed on 2026-10-28 by dropping `{{ .Providers }}` from
+  `.terraform-docs.yml`, because the Requirements table already shows the
+  constraint. Confirmed by running every hook with `terraform_validate`
+  enabled and lock files present.
+- Running `pre-commit` with `TF_PLUGIN_CACHE_DIR` set made
+  `terraform_validate` fail with a provider checksum mismatch: the hook
+  initialises every directory in parallel and they all raced on the one
+  shared cache. Not a problem in the code; it passes with the variable unset.
 
-**Still to do**
-- Update the status tables in `README.md` and `docs/architecture.md` once
-  the module branches are merged. They still say "planned".
+**Done after the merge (2026-10-28)**
+- All eleven pull requests were merged into `main` in stack order, with merge
+  commits, retargeting each to `main` first.
+- The status tables in `README.md` and `docs/architecture.md` now say the
+  modules are built, tested offline and never applied.
 
 **Check yourself**
 1. Why does the trivy ignore sit on the module's egress rule, and what is the
