@@ -9,8 +9,7 @@ the same result, changed only through pull requests.
 
 > **Status: work in progress.** The five modules and a `dev` environment are
 > on `main`, checked offline only: `terraform fmt`, `validate`, `tflint`,
-> `terraform test` with a mock provider, and `trivy`. Remote state and CI are
-> not built. The tables below say exactly what is built and what is planned.
+> `terraform test` with a mock provider, and `trivy`. CI is not built. The tables below say exactly what is built and what is planned.
 > Nothing here has been applied to an AWS account yet.
 
 <!-- TODO(phase 4): add CI status badges once the workflows exist. -->
@@ -20,10 +19,11 @@ the same result, changed only through pull requests.
 | Area | State |
 |------|-------|
 | Provider configuration, default tags, version pinning | Built |
-| Architecture docs, requirements, ADRs 0001-0009 | Built |
+| Architecture docs, requirements, ADRs 0001-0010 | Built |
 | `vpc`, `s3`, `iam`, `ec2`, `rds` modules | Built and tested offline, never applied |
 | `envs/dev` calling `vpc`, `s3`, `ec2` and `rds` | Built, never planned or applied |
-| Remote state bootstrap (`bootstrap/`), which will also call `iam` | Planned |
+| `bootstrap/`: state bucket and CI roles (calls `s3` and `iam`) | Built and tested offline, never applied |
+| S3 backend with native locking in `envs/dev` | Configured; no state exists yet because `envs/dev` has never been applied |
 | CI: plan on pull request, apply on merge | Planned |
 | Load balancer, Auto Scaling, CloudTrail, CloudWatch alarms | Planned, beyond the initial scope ([ADR 0007](docs/adr/0007-initial-scope-five-modules.md)) |
 
@@ -81,15 +81,21 @@ known limitations.
 
 ## Quickstart
 
-> **Not runnable yet.** `envs/dev/` exists but has never been planned or
-> applied, and `bootstrap/` does not exist. This is the intended flow, to be
-> confirmed and corrected once they do.
+> **Never run.** `bootstrap/` and `envs/dev/` are written and checked
+> offline, but neither has been planned or applied. This is the intended
+> flow, to be confirmed and corrected after the first real run.
 
-1. `cd bootstrap`, then `terraform init`, `plan` and `apply` to create the
-   state bucket. This uses local state, once.
-2. `cd envs/dev`, copy `terraform.tfvars.example` to `terraform.tfvars` and
-   fill in your values. That file is git-ignored.
-3. `terraform init`, `terraform plan`, then `terraform apply`.
+1. `cd bootstrap`, copy `terraform.tfvars.example` to `terraform.tfvars`,
+   set `github_repository`, then `terraform init`, `plan` and `apply`. This
+   creates the state bucket and the CI roles, uses local state, and is done
+   once. See [bootstrap/README.md](bootstrap/README.md).
+2. `cd envs/dev`, copy `backend.hcl.example` to `backend.hcl` and put the
+   bucket name from step 1 in it. Both `backend.hcl` and `terraform.tfvars`
+   are git-ignored.
+3. Copy `terraform.tfvars.example` to `terraform.tfvars` and fill in your
+   values.
+4. `terraform init -backend-config=backend.hcl`, `terraform plan`, then
+   `terraform apply`.
 
 ## Tear down
 
@@ -99,9 +105,10 @@ known limitations.
 1. In `envs/dev`: `terraform destroy`.
 2. Empty the state bucket. It is versioned, so every object version and
    delete marker must be removed, not only the current objects.
-3. In `bootstrap/`: remove the `prevent_destroy` lifecycle guard
-   ([ADR 0005](docs/adr/0005-s3-native-locking-and-terraform-bootstrap.md)),
-   then `terraform destroy`.
+3. In `bootstrap/`: `terraform destroy`. It fails while the bucket holds
+   anything, because `force_destroy = false`
+   ([ADR 0010](docs/adr/0010-state-bucket-from-the-s3-module-and-partial-backend.md)),
+   so step 2 has to come first.
 
 TODO(measure): record the date the full destroy path was run end to end,
 and anything that did not clean up.
@@ -132,7 +139,7 @@ TODO(measure): cost of one apply-and-destroy session, from Cost Explorer.
 | `ec2` | Instance reachable through SSM, IMDSv2 required | Built, tested offline, never applied |
 | `rds` | Private encrypted database, password in Secrets Manager | Built, tested offline, never applied |
 | `s3` | Private bucket with versioning, encryption and TLS-only policy | Built, tested offline, never applied |
-| `iam` | Least-privilege roles, GitHub OIDC provider and CI role | Built, tested offline, not called by any environment yet (it runs from `bootstrap/`, [ADR 0009](docs/adr/0009-ci-roles-and-where-the-iam-module-runs.md)) |
+| `iam` | Least-privilege roles, GitHub OIDC provider and CI role | Built, tested offline, never applied. Called from `bootstrap/`, not `envs/dev` ([ADR 0009](docs/adr/0009-ci-roles-and-where-the-iam-module-runs.md)) |
 
 ## Repository layout
 
@@ -145,11 +152,11 @@ What exists today:
 │   ├── architecture.md
 │   ├── requirements.md
 │   └── LEARNING.md     what was learned in each phase
+├── bootstrap/          applied once: state bucket and CI roles (s3, iam)
 ├── envs/
 │   └── dev/            root module: calls vpc, s3, ec2 and rds
 ├── modules/
 │   ├── vpc/  s3/  iam/  ec2/  rds/    each with tests/ and a README
-├── scripts/            bootstrap-state.sh (to be replaced by bootstrap/)
 ├── .pre-commit-config.yaml  .tflint.hcl  .terraform-docs.yml
 └── .github/            CODEOWNERS, pull request template
 ```
@@ -167,6 +174,7 @@ What exists today:
 | [0007](docs/adr/0007-initial-scope-five-modules.md) | Initial scope: five modules, one instance |
 | [0008](docs/adr/0008-nat-gateway-opt-in-and-ssm-connectivity.md) | NAT Gateway is opt-in; SSM needs an outbound path |
 | [0009](docs/adr/0009-ci-roles-and-where-the-iam-module-runs.md) | CI roles, and why the `iam` module runs from `bootstrap/` |
+| [0010](docs/adr/0010-state-bucket-from-the-s3-module-and-partial-backend.md) | State bucket from the `s3` module; partial backend |
 
 ## Contributing and security
 
