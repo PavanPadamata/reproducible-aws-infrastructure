@@ -1,0 +1,14 @@
+# Copy this file to terraform.tfvars and edit the values. terraform.tfvars
+# is git-ignored; only this .example file is committed.
+
+# Required. The only repository that may assume the CI roles.
+github_repository = "OWNER/REPOSITORY"
+
+# The values below are the defaults.
+aws_region        = "eu-central-1"
+project_name      = "reproducible-aws-infra"
+apply_environment = "dev"
+
+# An AWS account can hold one GitHub OIDC provider. Set to false if this
+# account already has one, and it will be looked up instead of created.
+create_github_oidc_provider = true
