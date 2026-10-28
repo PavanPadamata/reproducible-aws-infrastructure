@@ -18,6 +18,10 @@ crash.*.log
 *.tfvars.json
 !terraform.tfvars.example
 
+# Partial backend configuration: holds the state bucket name, which
+# contains the AWS account ID. A committed backend.hcl.example documents it.
+backend.hcl
+
 # Saved plan files embed resource attributes and can contain secrets.
 *.tfplan
 

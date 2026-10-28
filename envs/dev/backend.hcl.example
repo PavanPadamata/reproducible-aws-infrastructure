@@ -1,0 +1,7 @@
+# Copy this file to backend.hcl and fill in the bucket name. backend.hcl is
+# git-ignored because the name contains the AWS account ID.
+#
+# The name is the state_bucket_name output of bootstrap/:
+#   terraform -chdir=../../bootstrap output -raw state_bucket_name
+
+bucket = "reproducible-aws-infra-tfstate-ACCOUNT_ID"
