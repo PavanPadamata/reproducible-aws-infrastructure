@@ -20,7 +20,8 @@ it is built. Scope was narrowed in ADR 0007.
 | EC2 instance with SSM access | Built (on `main`), tested offline, never applied |
 | RDS database | Built (on `main`), tested offline, never applied |
 | S3 bucket | Built (on `main`), tested offline, never applied |
-| IAM roles, GitHub OIDC provider | Built (on `main`), tested offline; called from `bootstrap/`, which does not exist yet (ADR 0009) |
+| IAM roles, GitHub OIDC provider | Built (on `main`), tested offline, never applied; called from `bootstrap/` (ADR 0009) |
+| Remote state bucket (`bootstrap/`) and S3 backend in `envs/dev` | Built, tested offline, never applied (ADR 0005, ADR 0010) |
 | Application Load Balancer | Planned, beyond the initial scope |
 | Auto Scaling group | Planned, beyond the initial scope |
 | CloudTrail, CloudWatch metrics and alarm | Planned, beyond the initial scope |

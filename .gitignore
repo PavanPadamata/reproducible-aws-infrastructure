@@ -1,6 +1,7 @@
 # Terraform state contains everything Terraform knows about the
 # infrastructure, including values marked sensitive (database passwords,
-# private IPs) in plaintext. Never commit. Moved to S3 in a later phase.
+# private IPs) in plaintext. Never commit. envs/dev keeps its state in S3;
+# bootstrap/ keeps a small local file.
 *.tfstate
 *.tfstate.*
 

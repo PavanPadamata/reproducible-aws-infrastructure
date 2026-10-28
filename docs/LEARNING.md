@@ -173,3 +173,77 @@ once the tools were installed; the results are under "Verification" below.
    committed version the reproducible one?
 3. Why are the RDS deletion-protection and backup findings left visible
    instead of suppressed, when the CRITICAL egress finding is suppressed?
+
+## 2026-10-28 — Phase 3: remote state
+
+**Status of this entry:** `bootstrap/` and the S3 backend are written and
+checked offline (`fmt`, `validate`, `tflint`, `trivy`, three mock-provider
+tests). Nothing has been planned or applied: there are no AWS credentials on
+the machine, and the backend has never talked to real S3.
+
+**Concepts**
+- State holds every attribute of every resource, including secrets, in
+  plaintext. That is why it lives in a private, encrypted, versioned bucket
+  and never in git.
+- S3 native locking (`use_lockfile = true`, Terraform 1.11+): Terraform
+  writes a `.tflock` object next to the state for the length of a run, so a
+  second run cannot write at the same time. It replaces the DynamoDB lock
+  table, one resource fewer to create, secure and pay for.
+- The chicken-and-egg problem: the bucket must exist before Terraform can use
+  it as a backend, so `bootstrap/` is applied once with local state. Its state
+  file is small, git-ignored, and has to be kept by whoever ran the apply.
+- A backend block cannot use variables. A partial configuration puts the
+  fixed settings in `backend.tf` and the rest in a file passed with
+  `terraform init -backend-config=backend.hcl`. Here the bucket name has the
+  AWS account ID in it, so it stays out of the repository.
+- `prevent_destroy` versus `force_destroy = false`: `prevent_destroy` is a
+  `lifecycle` argument and must be a literal, so it cannot be passed into a
+  module. `force_destroy = false` relies on AWS refusing to delete a bucket
+  that holds any object, version or delete marker. It fails at apply, not at
+  plan, and only while the bucket is not empty (ADR 0010).
+- `init -migrate-state` copies existing state into a new backend. It was not
+  needed: `envs/dev` has never been applied, so there is nothing to copy.
+- The two root modules share one committed lock file, so `bootstrap/` and
+  `envs/dev` run the same provider version.
+- The apply role manages everything named `<project>-*`, which also matches
+  the state bucket and the CI roles. The explicit `Deny` statements in the
+  `iam` module are what keep that safe.
+
+**Commands**
+- `terraform init -backend=false`, to validate without touching a backend.
+- `terraform init -backend-config=backend.hcl` (not run yet).
+- `terraform -chdir=../../bootstrap output -raw state_bucket_name`.
+- `terraform import`, the recovery path if the bootstrap state file is lost.
+
+**Mistakes and fixes**
+- A test used `expect_failures = [module.iam.var.github_repository]`.
+  Terraform only allows root-level variables, outputs, checks, resources and
+  data sources there. Copying the module's validation into the root would
+  make two rules that can drift, so the tests were dropped; the `iam`
+  module's own tests already cover both cases.
+- A test asserted the bucket name from the `bucket_id` output. A mock
+  provider fills computed attributes such as `id` with random strings, so it
+  returned `do28mp63`. The output now uses the name the configuration asked
+  for, which AWS returns as the bucket id anyway.
+- `terraform init` in the new directory resolved provider 6.70.0, while
+  `envs/dev` is locked to 6.58.0. Replaced the new lock file with a copy of
+  the dev one.
+
+**Not verified yet**
+- No `terraform plan` or `apply` of `bootstrap/`, so the IAM policies, the
+  OIDC trust and the bucket have never run against AWS. ADR 0009 expects
+  `AccessDenied` events on the first run.
+- `terraform init -backend-config=...` against a real bucket, including that
+  `use_lockfile` writes the lock object.
+- The GitHub Environment protection (required reviewers, deployment branch
+  limited to `main`), which the apply role depends on.
+
+**Check yourself**
+1. A backend block cannot contain `var.bucket`. What do you do instead, and
+   why is the bucket name kept out of the repository?
+2. ADR 0005 asked for `prevent_destroy` on the state bucket and ADR 0010
+   uses `force_destroy = false`. When does each one stop a destroy, and in
+   which case is the new setting weaker?
+3. `bootstrap/` passes `reproducible-aws-infra` as `name_prefix` to the `iam`
+   module, not `reproducible-aws-infra-dev`. Why, and which statements stop
+   the apply role from changing the state bucket and its own role?
