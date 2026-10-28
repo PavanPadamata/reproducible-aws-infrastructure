@@ -16,11 +16,11 @@ it is built. Scope was narrowed in ADR 0007.
 | Component | Status |
 |-----------|--------|
 | Provider configuration, tags, version pinning | Built (on `main`) |
-| VPC, subnets, route tables, IGW, NAT Gateway | Written on branch `feat/networking`, not yet on `main` |
-| EC2 instance with SSM access | Planned |
-| RDS database | Planned |
-| S3 bucket | Planned |
-| IAM roles, GitHub OIDC provider | Planned |
+| VPC, subnets, route tables, IGW, NAT Gateway (opt-in) | Built (on `main`), tested offline, never applied |
+| EC2 instance with SSM access | Built (on `main`), tested offline, never applied |
+| RDS database | Built (on `main`), tested offline, never applied |
+| S3 bucket | Built (on `main`), tested offline, never applied |
+| IAM roles, GitHub OIDC provider | Built (on `main`), tested offline; called from `bootstrap/`, which does not exist yet (ADR 0009) |
 | Application Load Balancer | Planned, beyond the initial scope |
 | Auto Scaling group | Planned, beyond the initial scope |
 | CloudTrail, CloudWatch metrics and alarm | Planned, beyond the initial scope |
