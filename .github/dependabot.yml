@@ -1,0 +1,23 @@
+# Keeps the pinned versions current by opening pull requests, so an update
+# is reviewed like any other change. The workflows pin actions to commit
+# SHAs; Dependabot updates the SHA and the version comment together.
+
+version: 2
+
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "ci"
+
+  # The AWS provider. Each directory with a lock file is listed.
+  - package-ecosystem: terraform
+    directories:
+      - /bootstrap
+      - /envs/dev
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "chore"

@@ -1,0 +1,156 @@
+# Checks that need no AWS access: formatting, validation, lint, generated
+# docs, offline tests and security scans. They run on every pull request and
+# on every push to main.
+#
+# Every action is pinned to a full commit SHA, with the release in the
+# comment, because a tag can be moved after the fact. Dependabot proposes
+# updates. Tools downloaded by hand are checked against a pinned SHA-256.
+
+name: checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Read-only by default. No job here needs more.
+permissions:
+  contents: read
+
+# A newer push to the same branch makes the older run pointless.
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The tool versions the repository was developed and tested with.
+  TFLINT_VERSION: v0.65.0
+  TRIVY_VERSION: v0.76.1
+  PRE_COMMIT_VERSION: 4.7.0
+  TERRAFORM_DOCS_VERSION: v0.24.0
+  TERRAFORM_DOCS_SHA256: 9005daf969de0b50134493a2c00078b49f5f5b39d021cda7c89bf4d4f3d776d3
+  GITLEAKS_VERSION: 8.30.1
+  GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+
+jobs:
+  # The same hooks a contributor runs locally with pre-commit, so a green
+  # local run means a green CI run: fmt, validate, tflint, terraform-docs
+  # and the file hygiene hooks. gitleaks runs in the security job instead.
+  lint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Read the Terraform version
+        id: tf
+        shell: bash
+        run: echo "version=$(cat .terraform-version)" >> "$GITHUB_OUTPUT"
+
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: ${{ steps.tf.outputs.version }}
+          terraform_wrapper: false
+
+      - uses: terraform-linters/setup-tflint@6ffdbaa3be476b3431f7275c26966ef32ff60337 # v6.3.2
+        with:
+          tflint_version: ${{ env.TFLINT_VERSION }}
+
+      - name: Install terraform-docs
+        shell: bash
+        run: |
+          curl -fsSLO "https://github.com/terraform-docs/terraform-docs/releases/download/${TERRAFORM_DOCS_VERSION}/terraform-docs-${TERRAFORM_DOCS_VERSION}-linux-amd64.tar.gz"
+          echo "${TERRAFORM_DOCS_SHA256}  terraform-docs-${TERRAFORM_DOCS_VERSION}-linux-amd64.tar.gz" | sha256sum -c -
+          tar -xzf "terraform-docs-${TERRAFORM_DOCS_VERSION}-linux-amd64.tar.gz" terraform-docs
+          sudo install terraform-docs /usr/local/bin/terraform-docs
+
+      - name: Install pre-commit
+        shell: bash
+        run: pipx install "pre-commit==${PRE_COMMIT_VERSION}"
+
+      # Downloads the AWS ruleset named in .tflint.hcl.
+      - name: Initialise tflint
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: tflint --init --config .tflint.hcl
+
+      - name: Run the hooks
+        shell: bash
+        env:
+          SKIP: gitleaks
+        run: pre-commit run --all-files --show-diff-on-failure
+
+  # Offline tests: a mock provider stands in for AWS, so no credentials are
+  # needed and nothing is created.
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        directory:
+          - modules/vpc
+          - modules/s3
+          - modules/iam
+          - modules/ec2
+          - modules/rds
+          - bootstrap
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Read the Terraform version
+        id: tf
+        shell: bash
+        run: echo "version=$(cat .terraform-version)" >> "$GITHUB_OUTPUT"
+
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: ${{ steps.tf.outputs.version }}
+          terraform_wrapper: false
+
+      - name: terraform test
+        shell: bash
+        working-directory: ${{ matrix.directory }}
+        run: |
+          terraform init -backend=false -input=false
+          terraform test
+
+  # Misconfigurations in the Terraform code and secrets anywhere in the
+  # history. Only HIGH and CRITICAL findings fail the run; the accepted
+  # MEDIUM and LOW findings are listed in docs/LEARNING.md.
+  security:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      # Full history, because a secret removed in a later commit is still
+      # in the repository.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: ${{ env.TRIVY_VERSION }}
+          scan-type: config
+          scan-ref: .
+          skip-dirs: "**/.terraform"
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+
+      - name: Install gitleaks
+        shell: bash
+        run: |
+          curl -fsSLO "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" | sha256sum -c -
+          tar -xzf "gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" gitleaks
+          sudo install gitleaks /usr/local/bin/gitleaks
+
+      - name: Scan the history for secrets
+        shell: bash
+        run: gitleaks detect --source . --redact --no-banner
