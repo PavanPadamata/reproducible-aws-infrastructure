@@ -1,10 +1,16 @@
-# Outputs expose values needed by later phases and make the created
-# resources inspectable with `terraform output` without opening the
-# console.
-
 output "vpc_id" {
   description = "ID of the VPC."
   value       = aws_vpc.main.id
+}
+
+output "vpc_cidr_block" {
+  description = "CIDR block of the VPC."
+  value       = aws_vpc.main.cidr_block
+}
+
+output "availability_zones" {
+  description = "Availability Zones the subnets are spread across."
+  value       = local.azs
 }
 
 output "public_subnet_ids" {
@@ -23,6 +29,6 @@ output "data_subnet_ids" {
 }
 
 output "nat_gateway_public_ip" {
-  description = "Public IP of the NAT Gateway, the source address for all outbound traffic from private subnets."
-  value       = aws_eip.nat.public_ip
+  description = "Public IP of the NAT Gateway, the source address for outbound traffic from the app subnets. Null when the NAT Gateway is disabled."
+  value       = one(aws_eip.nat[*].public_ip)
 }
