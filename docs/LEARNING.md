@@ -52,15 +52,14 @@ wrong. Written for the maintainer, to revise from before interviews.
 - None found yet, but nothing here has been executed against the real
   tools. `terraform`, `tflint`, `terraform-docs`, `pre-commit` and
   `gitleaks` were not installed, so the hook configuration is only
-  checked for valid YAML. Run `pre-commit run --all-files` after
-  installing and record any fixes here.
+  checked for valid YAML. Run on 2026-10-28; the fixes are recorded under
+  Phase 2.
 
 ## 2026-10-26 — Phase 2: modules
 
-**Status of this entry:** the code was written but **not run**. `terraform`
-was not installed, so no `fmt`, `validate`, `tflint` or `terraform test`
-result exists yet. Only bracket balance and variable cross-references were
-checked with a script. Fill in the real results below after installing.
+**Status of this entry:** the code was written on 2026-10-26 without
+Terraform installed, so nothing could be run. It was verified on 2026-10-28
+once the tools were installed; the results are under "Verification" below.
 
 **Concepts**
 - A module declares the providers it needs (`required_providers`) but never
@@ -98,8 +97,12 @@ checked with a script. Fill in the real results below after installing.
 
 **Commands**
 - `git mv` in a commit of its own, so renames keep history.
-- `terraform init -backend=false` then `terraform test`, run per module
-  (to be run once Terraform is installed).
+- `terraform init -backend=false` then `terraform test`, run per module.
+- `terraform-docs --output-check <module>` fails when the README tables are
+  stale, without writing anything.
+- `pre-commit run --all-files` runs every hook once across the repository.
+- `trivy config --severity HIGH,CRITICAL .` scans the Terraform for
+  misconfigurations.
 
 **Mistakes and fixes**
 - `ec2` first used `for_each = toset(additional_policy_arns)`. That fails
@@ -113,12 +116,53 @@ checked with a script. Fill in the real results below after installing.
   that I could not support. Replaced with the one fact that is certain: the
   password is never an input to Terraform.
 
-**Still to do before this phase is finished**
-- Run `terraform fmt -check`, `validate`, `tflint` and `terraform test` in
-  every module and in `envs/dev`; record failures and fixes here.
-- Run `pre-commit run terraform_docs --all-files` to fill the empty
-  `BEGIN_TF_DOCS` blocks in the module READMEs.
-- Run `trivy config .` and record what it flags (flow log encryption and
-  the broad `ReadOnlyAccess` policy are likely).
+**Verification (2026-10-28, on `fix/trivy-ssm-egress`, the top of the stack)**
+- `terraform fmt`, `validate` (five modules and `envs/dev`), `tflint` with
+  the AWS ruleset and gitleaks: clean on the first run.
+- `terraform test`: 39 of 39 pass (ec2 10, iam 8, rds 9, s3 6, vpc 6).
+- Every `pre-commit` hook passes after the fixes below.
+- `trivy config`: one CRITICAL, AWS-0104, on the ec2 egress rule that allows
+  HTTPS to `0.0.0.0/0`. That is needed for Session Manager (ADR 0004, 0008),
+  so it is suppressed with `#trivy:ignore:AWS-0104` and the reason beside it.
+  The guess above about flow log encryption and `ReadOnlyAccess` was wrong:
+  trivy flagged neither.
+- Five MEDIUM/LOW findings are **accepted, not suppressed**, so they stay
+  visible: RDS backup retention (AWS-0077) and deletion protection
+  (AWS-0177), which `envs/dev` turns off on purpose for a disposable
+  environment (ADR 0002); RDS Performance Insights (AWS-0133), off because it
+  bills beyond its free tier; S3 access logging (AWS-0089) and VPC flow logs
+  (AWS-0178), which are opt-in. An ignore inside a module would hide the
+  check from every future caller, including a production one. The CI gate in
+  Phase 4 should fail on HIGH and CRITICAL only.
+
+**Mistakes and fixes found by running the tools**
+- The `end-of-file-fixer` hook rewrote 13 files that lacked a trailing
+  newline. Phase 0 had listed this as a finding, but no branch had fixed it.
+  Committed on its own as whitespace-only.
+- The module READMEs were committed with empty `BEGIN_TF_DOCS` blocks.
+  Filled by running terraform-docs.
+- `terraform init` failed with "because it is a symlink": the `.terraform/`
+  directories held symlinks into a plugin cache from an earlier session that
+  no longer existed. Deleted the (gitignored) directories and re-initialised
+  with `TF_PLUGIN_CACHE_DIR`, so the provider downloads once, not per module.
+- The `terraform_docs` hook rewrote the Providers table from `~> 6.0` to
+  `6.70.0`. The cause: `terraform_validate` runs first and creates a
+  `.terraform.lock.hcl` inside each module, and terraform-docs prints the
+  locked version when one exists. The committed `~> 6.0` is the reproducible
+  one. Open follow-up for `.terraform-docs.yml` on `chore/repo-hygiene`:
+  drop `{{ .Providers }}`, because the Requirements table already shows the
+  constraint.
+
+**Still to do**
 - Update the status tables in `README.md` and `docs/architecture.md` once
   the module branches are merged. They still say "planned".
+
+**Check yourself**
+1. Why does the trivy ignore sit on the module's egress rule, and what is the
+   downside of an ignore inside a reusable module compared with one in the
+   environment that calls it?
+2. `terraform-docs` printed `6.70.0` in one run and `~> 6.0` in another from
+   identical code. What was different between the two runs, and why is the
+   committed version the reproducible one?
+3. Why are the RDS deletion-protection and backup findings left visible
+   instead of suppressed, when the CRITICAL egress finding is suppressed?
