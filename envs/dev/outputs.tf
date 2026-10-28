@@ -31,6 +31,21 @@ output "app_ssm_session_command" {
   value       = "aws ssm start-session --target ${module.app.instance_id} --region ${var.aws_region}"
 }
 
+output "db_address" {
+  description = "DNS name of the database. Resolves only inside the VPC."
+  value       = module.db.address
+}
+
+output "db_port" {
+  description = "Port the database listens on."
+  value       = module.db.port
+}
+
+output "db_master_user_secret_arn" {
+  description = "ARN of the Secrets Manager secret that holds the database master password."
+  value       = module.db.master_user_secret_arn
+}
+
 output "app_data_bucket_name" {
   description = "Name of the application data S3 bucket."
   value       = module.app_data.bucket_id

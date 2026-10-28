@@ -1,0 +1,15 @@
+# Copy this file to terraform.tfvars and edit the values. terraform.tfvars
+# is git-ignored because real values can include account-specific settings;
+# only this .example file is committed.
+#
+# Every value below is the default, so a copy with no edits is valid.
+
+aws_region   = "eu-central-1"
+project_name = "reproducible-aws-infra"
+environment  = "dev"
+
+# The NAT Gateway is billed hourly while it exists. Without it the
+# application instance cannot reach Systems Manager, so you could not open
+# a session on it (ADR 0008). Set to false to save the cost, and expect to
+# lose access to the instance.
+enable_nat_gateway = true
