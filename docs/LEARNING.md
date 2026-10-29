@@ -323,3 +323,55 @@ not been applied. Expect the first runs to need fixes.
    those pins from going stale?
 3. Why is apply started by hand instead of on merge (ADR 0011), and what is
    the downside of the reviewer approving before the job's plan exists?
+
+## 2026-10-29 — Phase 5: repository settings and first release
+
+**Status of this entry:** the ruleset and the repository settings are applied
+and were read back from the API. The `v0.1.0` release is created after this
+branch merges. Nothing about AWS changed: `bootstrap/` is still not applied.
+
+**Concepts**
+- A ruleset (or classic branch protection) is what makes CI binding. Without
+  it, anyone with write access can push to `main` and skip every check.
+- Required status checks are matched by job name. A matrix job reports one
+  check per entry, here `test (modules/vpc)` and so on, so renaming a job or
+  a matrix entry silently stops a check from being required, and pull
+  requests wait forever for a check that no longer exists.
+- Requiring approvals does not work for a single maintainer: GitHub does not
+  let an author approve their own pull request. The ruleset requires a pull
+  request and passing checks with 0 approvals. `CODEOWNERS` is kept and
+  takes effect once a second maintainer exists and code owner review is on.
+- Merge methods: only merge commits are allowed, matching how the earlier
+  pull requests were merged. "Delete branch on merge" stops merged branches
+  piling up, which is what happened to the stacked branches.
+- Dependabot security updates need vulnerability alerts enabled first. The
+  API returns 422 otherwise.
+- An annotated tag (`git tag -a`) stores a message and author, a lightweight
+  tag does not. A GitHub Release is built on a tag and adds notes.
+
+**Commands**
+- `gh api repos/<owner>/<repo>/rulesets` to list rulesets;
+  `gh api -X POST ... --input file.json` to create one from a reviewable file.
+- `gh api -X PATCH repos/<owner>/<repo> -F delete_branch_on_merge=true`.
+- `git tag -a v0.1.0 -m "..."`, then `gh release create v0.1.0 --notes-file`.
+
+**Mistakes and fixes**
+- `automated-security-fixes` failed with 422 until
+  `vulnerability-alerts` was enabled.
+- The README still said no workflow had run on GitHub, which stopped being
+  true once `checks.yml` ran. Corrected in this branch.
+
+**Not verified yet**
+- The ruleset has not blocked a real pull request yet. The first PR to
+  `main` after this one shows whether the eight required check names match
+  what the workflow reports.
+- `plan.yml`, `apply.yml` and OIDC login are still unexercised, and the `dev`
+  Environment and repository variables still do not exist.
+
+**Check yourself**
+1. Why would renaming the `lint` job in `checks.yml` break merging, and where
+   would you notice it?
+2. The ruleset needs 0 approvals. What stops a bad change reaching `main`
+   today, and what would you add when a second maintainer joins?
+3. Why is the release notes section "not verified" as important as the
+   section listing what exists?
