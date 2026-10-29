@@ -116,8 +116,14 @@ and anything that did not clean up.
 
 ## CI/CD
 
-Three GitHub Actions workflows in `.github/workflows/`. None has run on
-GitHub yet; they are linted with `actionlint` only.
+Three GitHub Actions workflows in `.github/workflows/`. Only `checks.yml`
+has run on GitHub. `plan.yml` was skipped because the repository variables
+below are not set, and `apply.yml` has never run. Neither has authenticated
+to AWS.
+
+`main` is protected by a ruleset: changes go through a pull request, and the
+`lint`, `security` and `test` jobs of `checks.yml` must pass before merge.
+No approval is required, because the repository has one maintainer.
 
 | Workflow | Runs | What it does | AWS access |
 |----------|------|--------------|------------|
